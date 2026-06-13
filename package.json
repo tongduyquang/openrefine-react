@@ -1,0 +1,42 @@
+{
+  "name": "ts-test-weaver",
+  "version": "0.1.0",
+  "description": "AI-powered test generator and fixer for TypeScript/React codebases. Analyzes source files, detects existing test conventions, and writes test files in a mirrored directory structure using a developer-supplied AI prompt.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "weave-tests": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "commander": "^15.0.0",
+    "diff": "^9.0.0",
+    "execa": "^9.6.1",
+    "fast-glob": "^3.3.3",
+    "picocolors": "^1.1.1",
+    "ts-morph": "^28.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/diff": "^8.0.0",
+    "@types/node": "^25.9.3",
+    "@vitest/coverage-v8": "^4.1.8",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
