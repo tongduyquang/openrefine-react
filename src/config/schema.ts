@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AI_PROVIDERS, type AiProviderName } from './defaults.js';
 import type { LogLevel } from '../utils/logger.js';
 
 export const ConventionsOverrideSchema = z.object({
@@ -19,6 +20,7 @@ export const WeaverFileConfigSchema = z.object({
   include: z.array(z.string()).optional(),
   exclude: z.array(z.string()).optional(),
   conventions: ConventionsOverrideSchema.optional(),
+  provider: z.enum(AI_PROVIDERS).optional(),
   model: z.string().optional(),
   fixLoopAttempts: z.number().int().min(0).optional(),
   coverageThreshold: z.number().min(0).max(100).optional(),
@@ -46,6 +48,7 @@ export interface CliOptions {
   skipValidation?: boolean;
   resume?: boolean;
   fresh?: boolean;
+  provider?: string;
   model?: string;
   reportDir?: string;
   json?: boolean;
@@ -70,6 +73,7 @@ export interface WeaverConfig {
   fixLoopAttempts: number;
   skipValidation: boolean;
   resume: boolean;
+  provider: AiProviderName;
   model: string;
   reportDir: string;
   json: boolean;

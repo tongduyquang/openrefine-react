@@ -1,14 +1,17 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
+  AI_PROVIDERS,
   CONFIG_FILE_NAME,
   DEFAULT_COVERAGE_THRESHOLD,
   DEFAULT_EXCLUDE,
   DEFAULT_FIX_LOOP_ATTEMPTS,
   DEFAULT_INCLUDE,
-  DEFAULT_MODEL,
+  DEFAULT_MODELS,
+  DEFAULT_PROVIDER,
   REPORT_DIR_NAME,
   WEAVER_DIR,
+  type AiProviderName,
 } from './defaults.js';
 import { WeaverFileConfigSchema, type CliOptions, type WeaverConfig, type WeaverFileConfig } from './schema.js';
 import type { LogLevel } from '../utils/logger.js';
@@ -90,6 +93,12 @@ export async function loadConfig(cli: CliOptions): Promise<WeaverConfig> {
     ? path.resolve(repoRoot, cli.reportDir)
     : path.join(repoRoot, WEAVER_DIR, REPORT_DIR_NAME);
 
+  const providerRaw = cli.provider ?? fileConfig.provider ?? process.env.WEAVER_PROVIDER ?? DEFAULT_PROVIDER;
+  if (!AI_PROVIDERS.includes(providerRaw as AiProviderName)) {
+    throw new ConfigError(`Unknown provider "${providerRaw}". Valid providers: ${AI_PROVIDERS.join(', ')}.`);
+  }
+  const provider = providerRaw as AiProviderName;
+
   return {
     repoRoot,
     include: cli.include ?? fileConfig.include ?? DEFAULT_INCLUDE,
@@ -106,7 +115,8 @@ export async function loadConfig(cli: CliOptions): Promise<WeaverConfig> {
     fixLoopAttempts: cli.fixLoopAttempts ?? fileConfig.fixLoopAttempts ?? DEFAULT_FIX_LOOP_ATTEMPTS,
     skipValidation: cli.skipValidation ?? fileConfig.skipValidation ?? false,
     resume: cli.resume ?? false,
-    model: cli.model ?? fileConfig.model ?? process.env.WEAVER_MODEL ?? DEFAULT_MODEL,
+    provider,
+    model: cli.model ?? fileConfig.model ?? process.env.WEAVER_MODEL ?? DEFAULT_MODELS[provider],
     reportDir,
     json: cli.json ?? false,
     logLevel: resolveLogLevel(cli),

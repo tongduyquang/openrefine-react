@@ -13,9 +13,12 @@ export interface RunCommandOptions {
   args?: string[];
 }
 
+/** AI-provider credentials that must never reach a target repo's tooling. */
+const SENSITIVE_ENV_KEYS = ['ANTHROPIC_API_KEY', 'GITHUB_MODELS_TOKEN', 'GITHUB_TOKEN'];
+
 /**
  * Run a command in `cwd` with a timeout, never throwing on non-zero exit.
- * Strips ANTHROPIC_API_KEY from the child's env so AI credentials are never
+ * Strips AI-provider credentials from the child's env so they are never
  * passed to a target repo's tooling (tsc/test runner/git).
  */
 export async function runCommand(
@@ -24,7 +27,9 @@ export async function runCommand(
   options: RunCommandOptions,
 ): Promise<ExecResult> {
   const env = { ...process.env };
-  delete env.ANTHROPIC_API_KEY;
+  for (const key of SENSITIVE_ENV_KEYS) {
+    delete env[key];
+  }
 
   try {
     const result = await execa(command, args, {

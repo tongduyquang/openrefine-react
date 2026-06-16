@@ -24,6 +24,7 @@ function baseConfig(repoRoot: string, overrides: Partial<WeaverConfig> = {}): We
     fixLoopAttempts: 3,
     skipValidation: false,
     resume: false,
+    provider: 'anthropic',
     model: 'test-model',
     reportDir: '.weaver/reports',
     json: false,

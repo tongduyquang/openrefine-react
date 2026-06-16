@@ -1,8 +1,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
-import { AnthropicProvider } from '../ai/anthropicProvider.js';
 import type { AiProvider } from '../ai/aiProvider.js';
+import { createAiProvider } from '../ai/createProvider.js';
 import { extractCode } from '../ai/responseParser.js';
 import { loadConfig } from '../config/load.js';
 import type { CliOptions, WeaverConfig } from '../config/schema.js';
@@ -86,7 +86,7 @@ export async function runGenerate(cliOptions: CliOptions, aiProvider?: AiProvide
     return;
   }
 
-  const ai = aiProvider ?? new AnthropicProvider(config.model);
+  const ai = aiProvider ?? createAiProvider(config.provider, config.model);
   const startedAt = new Date().toISOString();
   const results: TaskResult[] = [];
 

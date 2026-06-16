@@ -6,11 +6,15 @@ AI-powered test generator and fixer for TypeScript/React codebases.
 Vitest, `.test` vs `.spec`, colocated vs `__tests__` vs a mirrored `tests/`
 tree, React Testing Library / MSW / jest-dom usage), extracts AST context for
 each source file (component props, hook signatures, exported functions,
-JSDoc) with [ts-morph](https://ts-morph.com/), and asks Claude to generate or
-fix test files — writing the result into a directory structure that mirrors
+JSDoc) with [ts-morph](https://ts-morph.com/), and asks an AI model to generate
+or fix test files — writing the result into a directory structure that mirrors
 the source layout. A bounded repair loop runs `tsc --noEmit` and the test
 runner after each write, feeding any errors back to the AI until the test
 passes or attempts run out.
+
+Two AI backends are supported: **Anthropic** (Claude) and the **GitHub Models
+API** (OpenAI-compatible, authenticated with a GitHub token — handy if you
+don't have an Anthropic account). See [AI providers](#ai-providers).
 
 ## Install
 
@@ -25,7 +29,9 @@ This produces the `weave-tests` CLI at `dist/cli.js` (also exposed as the
 ## Quick start
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+# Pick ONE backend:
+export ANTHROPIC_API_KEY=sk-ant-...        # Anthropic (default), or:
+export GITHUB_MODELS_TOKEN=github_pat_...  # GitHub Models (use --provider github)
 
 # 1. Detect conventions and scaffold .weaverc.json in the target repo
 node dist/cli.js init --repo /path/to/your-repo
@@ -40,6 +46,10 @@ node dist/cli.js generate --repo /path/to/your-repo --dry-run \
 # 4. Generate (and validate/fix) test files for real
 node dist/cli.js generate --repo /path/to/your-repo \
   --prompt-file ./test-style-guide.md
+
+# ...or run it against the free GitHub Models API instead of Anthropic
+node dist/cli.js generate --repo /path/to/your-repo \
+  --provider github --model openai/gpt-4o
 ```
 
 ## Input / output contract
@@ -77,7 +87,8 @@ node dist/cli.js generate --repo /path/to/your-repo \
 | `--fix-loop-attempts <n>` | Max AI repair iterations per file (default 3) |
 | `--skip-validation` | Skip the `tsc`/test-runner validation loop |
 | `--resume` | Resume from `.weaver/manifest.json`, skipping already-passed files |
-| `--model <name>` | Anthropic model id |
+| `--provider <name>` | AI backend: `anthropic` (default) or `github` (GitHub Models API) |
+| `--model <name>` | Model id (provider-specific; e.g. `claude-sonnet-4-6` or `openai/gpt-4o`) |
 | `--report-dir <path>` | Directory for run reports (default `.weaver/reports`) |
 | `--json` | Emit a machine-readable JSON summary to stdout |
 | `-v, --verbose` / `--quiet` | Logging verbosity |
@@ -96,7 +107,8 @@ built-in defaults**.
 {
   "include": ["src/**/*.{ts,tsx}"],
   "exclude": ["src/legacy/**"],
-  "model": "claude-sonnet-4-6",
+  "provider": "anthropic",        // or "github"
+  "model": "claude-sonnet-4-6",   // or e.g. "openai/gpt-4o" for the github provider
   "fixLoopAttempts": 3,
   "coverageThreshold": 80,
   "skipValidation": false,
@@ -117,6 +129,44 @@ Any field under `conventions` overrides auto-detection for just that field —
 useful when a repo has mixed conventions and you want generated files to
 follow one consistently.
 
+## AI providers
+
+Select the backend with `--provider` (or the `provider` field in
+`.weaverc.json`, or the `WEAVER_PROVIDER` env var). The default is `anthropic`.
+
+### `anthropic` (default)
+
+- **Credential:** `ANTHROPIC_API_KEY` (env only).
+- **Default model:** `claude-sonnet-4-6`. Override with `--model` / `WEAVER_MODEL`.
+
+### `github` — GitHub Models API
+
+Uses the OpenAI-compatible [GitHub Models](https://docs.github.com/en/github-models)
+inference endpoint (`https://models.github.ai/inference`). Useful if you don't
+have an Anthropic account — GitHub offers a free tier (with rate limits).
+
+- **Credential:** a GitHub token with the **`models: read`** permission, read
+  from `GITHUB_MODELS_TOKEN` (preferred) or `GITHUB_TOKEN` (env only). Create a
+  fine-grained personal access token at
+  *Settings → Developer settings → Personal access tokens* and grant it the
+  *Models* permission.
+- **Default model:** `openai/gpt-4o`. Models use a `publisher/model` name;
+  override with `--model`, e.g. `openai/gpt-4o-mini`,
+  `meta/Llama-3.3-70B-Instruct`, or `deepseek/DeepSeek-V3`.
+- **Endpoint override:** set `GITHUB_MODELS_BASE_URL` to use a compatible
+  endpoint (e.g. the Azure AI inference URL).
+
+```bash
+export GITHUB_MODELS_TOKEN=github_pat_...
+node dist/cli.js generate --repo /path/to/your-repo \
+  --provider github --model openai/gpt-4o \
+  --prompt "Prefer getByRole queries; one describe block per exported symbol."
+```
+
+> The GitHub Models free tier has lower rate/output limits than a paid
+> Anthropic key. For large repos, use `--max-files` and/or `--fix-loop-attempts 1`
+> to stay within limits.
+
 ## How a run works
 
 1. **Scan** — discover candidate source files via include/exclude globs,
@@ -133,7 +183,8 @@ follow one consistently.
    tasks already marked `pass` in `.weaver/manifest.json` are skipped.
 6. **Prompt + generate** — for each task, assemble a prompt from the AST
    context, a few-shot example (the most similar existing test file in the
-   repo, if any), coverage hints, and your custom prompt; call Claude.
+   repo, if any), coverage hints, and your custom prompt; call the selected
+   AI provider.
 7. **Validate + repair** — write the file, run `tsc --noEmit` and the single
    test file through the project's test runner; on failure, send the error
    output back to the AI and retry (up to `--fix-loop-attempts`).
@@ -142,13 +193,17 @@ follow one consistently.
 
 ## Security notes
 
-- `ANTHROPIC_API_KEY` is read **only** from the environment — never accepted
-  via CLI flag or `.weaverc.json`, so it can't leak into shell history or a
-  committed config file.
-- The key is stripped from the environment of every subprocess spawned in the
-  target repo (`tsc`, the test runner, `git`).
+- API credentials (`ANTHROPIC_API_KEY`, `GITHUB_MODELS_TOKEN`, `GITHUB_TOKEN`)
+  are read **only** from the environment — never accepted via CLI flag or
+  `.weaverc.json`, so they can't leak into shell history or a committed config.
+- Those credentials are stripped from the environment of every subprocess
+  spawned in the target repo (`tsc`, the test runner, `git`). Note: this means
+  `GITHUB_TOKEN` is not visible to your test suite during the validation run.
 - Full source/prompts/AI responses are never logged by default — only with
   `--verbose`, and they're excluded from run reports regardless.
+- Generating tests sends your source code to the selected provider's API
+  (Anthropic or GitHub). Use `--plan-only` (no AI call) or `--dry-run` to
+  preview without writing, and review each provider's data-use terms.
 
 ## Example project
 
